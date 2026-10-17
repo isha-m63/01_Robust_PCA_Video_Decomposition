@@ -1,227 +1,158 @@
 # Robust PCA for Video Background–Foreground Decomposition
 
-A computer vision and optimization project implementing **Robust Principal Component Analysis (RPCA)** from scratch for background subtraction in surveillance video.
+A comparative implementation of **Truncated SVD**, **Principal Component Analysis (PCA)**, and **Robust PCA (RPCA)** for video background modelling and foreground extraction.
 
-This project decomposes a video sequence into:
+This project began as an effort to better understand the mathematics behind **Singular Value Decomposition (SVD)**, **Principal Component Analysis (PCA)**, and **convex optimization**. Rather than treating these algorithms as black boxes, the goal was to study how they formulate low-rank approximation, why classical methods struggle with outliers, and how Robust PCA addresses these limitations through optimization.
 
-- a **low-rank background matrix** \(L\)
-- a **sparse foreground matrix** \(S\)
+The project evaluates all three methods on the **Background Models Challenge (BMC)** dataset using a common preprocessing pipeline and compares both reconstruction quality and foreground detection performance.
 
-using the **Inexact Augmented Lagrangian Method (IALM)**.
+---
 
-The implementation includes:
-- Singular Value Decomposition (SVD)
-- Singular Value Thresholding (SVT)
-- soft-thresholding proximal operators
-- iterative convex optimization
-- (planned, not yet implemented: randomized SVD acceleration)
-- evaluation on both synthetic and real-world video sequences
+## Motivation
+
+SVD and PCA are fundamental tools in machine learning, computer vision, and scientific computing. Both recover the best low-rank approximation of a matrix in the least-squares sense, but they do not explicitly distinguish moving foreground objects from the background.
+
+Robust PCA reformulates the problem by assuming that an observation matrix can be decomposed into
+
+* a **low-rank** background, and
+* a **sparse** foreground,
+
+which is solved through **Principal Component Pursuit (PCP)** using the **Inexact Augmented Lagrangian Method (IALM)**.
+
+This repository explores these ideas from both a mathematical and implementation perspective.
+
+---
+
+## Repository Structure
+
+```text
+.
+├── 01_svd_decomposition.ipynb     
+├── 02_pca_decomposition.ipynb      
+├── 03_rpca_decomposition.ipynb     
+├── 01_RPCA_Report.pdf             
+└── README.md
+```
+
+---
+
+## Methods
+
+### Truncated SVD
+
+* Computes the best rank-(k) approximation of the observation matrix
+* Minimizes Frobenius reconstruction error
+* Optimal under the Eckart–Young theorem
+
+### Principal Component Analysis (PCA)
+
+* Mean-centres the observation matrix
+* Performs low-rank approximation through SVD
+* Models variation around the temporal mean frame
+
+### Robust PCA (RPCA)
+
+Uses the Principal Component Pursuit formulation
+
+[
+\min_{L,S} |L|_* + \lambda|S|_1
+\quad\text{s.t.}\quad
+M=L+S
+]
+
+where
+
+* (L) is the low-rank background
+* (S) is the sparse foreground
+
+The optimization is solved using the **Inexact Augmented Lagrangian Method (IALM)** with alternating
+
+* Singular Value Thresholding (SVT)
+* Soft Thresholding
+* Dual variable updates
+
+---
+
+## Evaluation
+
+Background quality was evaluated using
+
+* Mean Squared Error (MSE)
+* Peak Signal-to-Noise Ratio (PSNR)
+* Structural Similarity Index (SSIM)
+* Relative Frobenius Error
+
+Foreground segmentation was evaluated using
+
+* Precision
+* Recall
+* F1-score
+* Specificity
+* Accuracy
+
+---
+
+## Results
+
+The experiments highlight the strengths and limitations of each approach.
+
+**SVD and PCA**
+
+* Produce optimal low-rank approximations
+* Frequently suffer from ghosting artifacts
+* Do not explicitly separate moving objects from background
+
+**Robust PCA**
+
+* Successfully separates low-rank static background from sparse moving foreground when its assumptions hold
+* Reduced ghosting artifacts compared to SVD and PCA
+* Recovers an almost rank-1 background on the synthetic BMC sequence
+* Performance degrades on complex real-world scenes where the background itself is no longer well modelled as low rank
+
+Observed real-world limitations can included:
+* illumination changes
+* dynamic backgrounds
+* increased effective rank
+- shadow artifacts
+* camera motion sensitivity
+
+
+These observations demonstrate why RPCA remains a powerful baseline while motivating more advanced methods such as dynamic and online RPCA.
+
+---
+
+## Report
+
+The accompanying report includes
+
+* optimization formulation
+* implementation details
+* convergence analysis
+* quantitative evaluation
+* qualitative visual results
+* discussion of limitations 
+
+---
+
+## References
+
+* Candès, E. J., Li, X., Ma, Y., & Wright, J. *Robust Principal Component Analysis?* Journal of the ACM, 2011.
+* Lin, Z., Chen, M., & Ma, Y. *The Augmented Lagrange Multiplier Method for Exact Recovery of Corrupted Low-Rank Matrices*, 2010.
+* Bouwmans, T., et al. *On the Applications of Robust PCA in Image and Video Processing*, Proceedings of the IEEE, 2018.
+
+---
+
+
+## Author
+
+**Isha Mahuvakar**
+
+This project was developed as part of a self-study into linear algebra, optimization, and computer vision, with an emphasis on understanding the mathematical foundations rather than simply applying existing libraries.
 
 
 ---
 
-# project overview
 
-Given an observation matrix:
-
-\[
-M = L + S
-\]
-
-where:
-- \(M\): observed video matrix
-- \(L\): low-rank background
-- \(S\): sparse moving foreground
-
-the goal is to separate stationary scene structure from moving objects.
-
-Each video frame is:
-1. converted to grayscale
-2. resized
-3. flattened into a vector
-4. stacked column-wise into the matrix \(M\)
-
-RPCA exploits the assumption that:
-- backgrounds are highly correlated across frames → low-rank
-- moving objects occupy relatively few pixels → sparse
-
-
----
-
-# mathematical formulation
-
-Robust PCA solves:
-
-\[
-\min_{L,S}
-\;
-\|L\|_*
-+
-\lambda \|S\|_1
-\]
-
-subject to:
-
-\[
-M = L + S
-\]
-
-where:
-- \(\|L\|_*\) is the nuclear norm (sum of singular values)
-- \(\|S\|_1\) promotes sparsity
-
-The optimization is solved using the **Inexact Augmented Lagrangian Method (IALM)**.
-
-
----
-
-# implemented components
-
-## 1. data acquisition and preprocessing
-
-- BMC synthetic benchmark
-- real-world `.avi` testing
-
-Preprocessing pipeline:
-- grayscale conversion
-- frame resizing
-- normalization to \([0,1]\)
-- matrix construction
-
-
-## 2. baseline truncated SVD
-
-Implemented a low-rank baseline using truncated SVD before RPCA.
-
-Purpose:
-- establish comparison baseline
-- demonstrate ghosting failure modes
-- motivate robust decomposition
-
-
-## 3. soft-thresholding operator
-
-Implemented element-wise proximal shrinkage:
-
-\[
-\text{soft}(x,\lambda)
-=
-\text{sign}(x)\max(|x|-\lambda,0)
-\]
-
-Used to enforce sparsity in \(S\).
-
-
-## 4. singular value thresholding (SVT)
-
-Implemented spectral shrinkage on singular values:
-
-\[
-M = U\Sigma V^T
-\]
-
-\[
-SVT_\tau(M)
-=
-U \cdot \text{soft}(\Sigma,\tau)\cdot V^T
-\]
-
-Used to enforce low-rank structure in \(L\).
-
-
-## 5. IALM optimization loop
-
-Implemented iterative updates for:
-- sparse matrix \(S\)
-- low-rank matrix \(L\)
-- dual variable \(Y\)
-
-with convergence checking using:
-
-\[
-\frac{
-\|M-L-S\|_F
-}{
-\|M\|_F
-}
-< \epsilon
-\]
-
-
-
----
-
-# datasets
-
-## BMC 2012 synthetic sequences
-
-Used for:
-- clean static background
-- moving vehicle foreground separation
-- baseline decomposition testing
-- robustness analysis
-
-
-## real-world `.avi` sequences
-
-Used to evaluate:
-- generalization
-- failure modes
-- limitations of low-rank assumptions
-
-
----
-
-# evaluation metrics
-
-Implemented and analyzed:
-
-## reconstruction metrics
-- PSNR
-- SSIM
-- RMSE
-- Frobenius reconstruction error
-- Relative Frobenius norm error
-
-## foreground segmentation metrics
-- Precision
-- Recall
-- F1 score
-
-## geometric metric
-- Center Location Error (CLE): defined in the pipeline notebook but not yet computed
-
-
----
-
-# results
-
-BMC 2012 sequence 111 (synthetic street scene, 25–30 s = 125 frames, 90×120 px, `M` is 10,800 × 125) and a real
-surveillance clip, Video_008 (50 frames). Values are from `v2_with_gt/` notebooks.
-
-| | Truncated SVD (k=3) | PCA | RPCA (IALM) |
-|---|---|---|---|
-| Synthetic: PSNR / SSIM of L | 42.26 dB / 0.9870 | 42.09 dB / 0.9860 | **45.65 dB / 0.9972** |
-| Synthetic: foreground F1 (Otsu) | 0.104 | 0.108 | 0.091 |
-| Real: PSNR / SSIM of L | 23.76 dB / 0.8362 | 23.70 dB / 0.8319 | 23.71 dB / 0.8395 |
-
-RPCA on the synthetic sequence converges in 46 iterations (6.7 s), recovers a **rank-1** background, and leaves 97.2%
-of `S` exactly zero. On the real clip it converges in 70 iterations but the background rank grows to **25 of 50** and
-`S` is only 17% zeros, i.e. the low-rank/sparse assumption breaks down.
-
-Reading these honestly:
-- RPCA gives the best background reconstruction on the synthetic video. PSNR and SSIM are measured against frame 0 of
-  `M`, used as a stand-in for a clean background, so they are a proxy.
-- On the ground-truth foreground masks all three methods have **high precision (≈ 0.6) but very low recall (≈ 0.05)**,
-  so F1 is ≈ 0.1 and RPCA is not better than SVD there. The moving vehicles are small, and at the Otsu threshold most
-  foreground pixels are missed.
-- The ground-truth numbers for the real clip (F1 ≈ 0.01) are not meaningful: the notebook applies the synthetic
-  sequence's mask to a different video.
-- Real-world limitations observed or expected: illumination changes, dynamic backgrounds, increased effective rank,
-  shadows, and camera motion. The Streamlit demo uses a looser stopping tolerance for the real clip so that noise is not
-  absorbed into a high-rank background.
-
-Details in [docs/results.md](docs/results.md).
 
 ---
 
@@ -271,9 +202,3 @@ python scripts/deploy_space.py <username>/robust-pca-video
 ```
 
 ---
-
-# references
-
-- Candès, Li, Ma & Wright (2011), *Robust Principal Component Analysis?*, J. ACM 58(3).
-- Lin, Chen & Ma (2010), *The Augmented Lagrange Multiplier Method for Exact Recovery of Corrupted Low-Rank Matrices*, arXiv:1009.5055.
-- Vacavant et al. (2012), *A Benchmark Dataset for Outdoor Foreground/Background Extraction* (BMC 2012).
