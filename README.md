@@ -211,3 +211,24 @@ Observed real-world limitations can included:
 ---
 
 
+
+
+---
+
+# live demo (Streamlit, Docker)
+
+`streamlit_app.py` provides an interactive demo (RPCA-IALM vs. truncated SVD, convergence plots,
+F1 against ground truth, animated GIF export). Short sample clips are bundled in `demo_assets/`;
+you can also upload your own video. The algorithms live in `rpca_demo.py`.
+
+```bash
+docker build -t rpca-demo .
+docker run -p 7860:7860 rpca-demo      # http://localhost:7860
+```
+
+Deploy to a Hugging Face Docker Space:
+
+```bash
+export HF_TOKEN=hf_xxx
+python scripts/deploy_space.py <username>/robust-pca-video
+```

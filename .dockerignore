@@ -1,0 +1,9 @@
+.git
+.ipynb_checkpoints
+__pycache__
+data
+outputs
+test
+v1_no_gt
+v2_with_gt
+*.ipynb
