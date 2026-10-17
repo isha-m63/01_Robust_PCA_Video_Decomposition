@@ -48,9 +48,35 @@ def soft_threshold(X: np.ndarray, lam: float) -> np.ndarray:
     return X.copy() if lam == 0 else np.sign(X) * np.maximum(np.abs(X) - lam, 0)
 
 
-def svt(A: np.ndarray, tau: float):
-    """Singular value thresholding: returns (low-rank approx, surviving rank)."""
-    U, s, Vt = np.linalg.svd(A, full_matrices=False)
+def randomized_svd(A: np.ndarray, k: int, n_oversample: int = 10, n_iter: int = 2, seed: int = 0):
+    """Halko-Martinsson-Tropp randomized SVD of the top-k singular triplets."""
+    rng = np.random.default_rng(seed)
+    m, n = A.shape
+    q = min(k + n_oversample, min(m, n))
+    Q, _ = np.linalg.qr(A @ rng.standard_normal((n, q)))
+    for _ in range(n_iter):                      # power iterations sharpen the spectrum
+        Q, _ = np.linalg.qr(A.T @ Q)
+        Q, _ = np.linalg.qr(A @ Q)
+    Ub, s, Vt = np.linalg.svd(Q.T @ A, full_matrices=False)
+    return (Q @ Ub)[:, :k], s[:k], Vt[:k]
+
+
+def svt(A: np.ndarray, tau: float, randomized: bool = False, rank_guess: int = 10):
+    """Singular value thresholding: returns (low-rank approx, surviving rank).
+
+    With randomized=True only the leading `rank_guess + 5` triplets are computed; the guess is enlarged
+    until the smallest computed singular value falls below tau (so nothing above tau is missed).
+    """
+    full = min(A.shape)
+    if randomized:
+        k = min(rank_guess + 5, full)
+        while True:
+            U, s, Vt = randomized_svd(A, k)
+            if s[-1] <= tau or k >= full:
+                break
+            k = min(2 * k, full)
+    else:
+        U, s, Vt = np.linalg.svd(A, full_matrices=False)
     s_t = soft_threshold(s, tau)
     rank = int(np.sum(s_t > 0))
     if rank == 0:
@@ -79,8 +105,16 @@ def svd_baseline(M: np.ndarray, k: int = 1):
 
 
 def rpca_ialm(M: np.ndarray, lam: float | None = None, rho: float = 1.2, mu_max: float = 1e4,
-              max_iter: int = 100, tol: float = 1e-7, progress=None):
-    """Solve min ||L||_* + lam ||S||_1  s.t.  L + S = M with IALM (Lin et al., 2010)."""
+              max_iter: int = 100, tol: float = 1e-7, progress=None,
+              svd: str = "full"):
+    """Solve min ||L||_* + lam ||S||_1  s.t.  L + S = M with IALM (Lin et al., 2010).
+
+    svd:     "full" (exact economy SVD) or "randomized" (faster; leading triplets only).
+
+    The initial penalty is mu_0 = 1.25 / ||M||_2 (Lin et al.), the same rule the notebooks' solver uses.
+    """
+    if svd not in ("full", "randomized"):
+        raise ValueError("svd must be 'full' or 'randomized'")
     m, n = M.shape
     M64 = M.astype(np.float64)
     M_norm = np.linalg.norm(M64, "fro")
@@ -89,9 +123,10 @@ def rpca_ialm(M: np.ndarray, lam: float | None = None, rho: float = 1.2, mu_max:
     L = np.zeros_like(M64); S = np.zeros_like(M64); Y = np.zeros_like(M64)
     d = Diagnostics(lam=lam)
     t0 = time.perf_counter()
+    rank = 10
     for k in range(max_iter):
         S = soft_threshold(M64 - L + Y / mu, lam / mu)
-        L, rank = svt(M64 - S + Y / mu, 1.0 / mu)
+        L, rank = svt(M64 - S + Y / mu, 1.0 / mu, randomized=(svd == "randomized"), rank_guess=rank)
         R = M64 - L - S
         Y = Y + mu * R
         mu = min(rho * mu, mu_max)
@@ -115,6 +150,27 @@ def foreground_scores(S: np.ndarray, GT: np.ndarray, threshold: float = 0.10):
     p = tp / (tp + fp) if tp + fp else 0.0
     r = tp / (tp + fn) if tp + fn else 0.0
     return p, r, (2 * p * r / (p + r) if p + r else 0.0)
+
+
+def center_location_error(S: np.ndarray, GT: np.ndarray, shape: tuple[int, int], threshold: float = 0.10):
+    """Mean distance (in pixels) between the centroid of the predicted and the true foreground mask.
+
+    shape = (height, width) of one frame. Frames where either mask is empty are skipped; returns
+    (mean CLE or nan, number of frames used).
+    """
+    h, w = shape
+    ys, xs = np.mgrid[0:h, 0:w]
+    xs, ys = xs.ravel().astype(np.float64), ys.ravel().astype(np.float64)
+    pred, truth = (np.abs(S) > threshold), (GT > 0.5)
+    errs = []
+    for j in range(S.shape[1]):
+        np_, nt = pred[:, j].sum(), truth[:, j].sum()
+        if np_ == 0 or nt == 0:
+            continue
+        cp = np.array([xs[pred[:, j]].mean(), ys[pred[:, j]].mean()])
+        ct = np.array([xs[truth[:, j]].mean(), ys[truth[:, j]].mean()])
+        errs.append(np.linalg.norm(cp - ct))
+    return (float(np.mean(errs)) if errs else float("nan")), len(errs)
 
 
 def psnr(ref: np.ndarray, est: np.ndarray) -> float:

@@ -36,14 +36,15 @@ stop when ‖M − L − S‖_F / ‖M‖_F < tol
 ```
 
 Soft-thresholding is `sign(x) · max(|x| − λ, 0)`; SVT applies it to the singular values. Per-iteration residual, rank of
-`L` and the fraction of zeros in `S` are recorded. The pipeline notebook uses a slightly different initial
-`μ = mn / (4‖M‖₁)`; the demo and the `v1`/`v2` notebooks follow Lin et al.
+`L` and the fraction of zeros in `S` are recorded. All notebooks and the demo use Lin et al.'s initial `μ`; the
+`μ = mn / (4‖M‖₁)` rule appears only in a raw diagnostic cell of the pipeline notebook. `svd="randomized"` replaces the
+exact SVD in the SVT step by a randomized SVD of the leading singular triplets.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `rpca_demo.py` | `read_video_matrix`, `soft_threshold`, `svt`, `svd_baseline`, `rpca_ialm`, `foreground_scores` (precision/recall/F1 of `|S| > threshold`), `psnr`, `Diagnostics` dataclass |
+| `rpca_demo.py` | `read_video_matrix`, `soft_threshold`, `svt`, `svd_baseline`, `rpca_ialm`, `randomized_svd`, `foreground_scores` (precision/recall/F1 of `|S| > threshold`), `center_location_error`, `psnr`, `Diagnostics` dataclass |
 | `streamlit_app.py` | UI: sample or uploaded video, settings, side-by-side SVD vs RPCA, diagnostics, GIF export |
 | `video_decomposition_pipeline.ipynb` | Original end-to-end notebook; downloads data, config, matrix cache, SVD baseline, IALM, metrics, real-video test |
 | `v1_no_gt/`, `v2_with_gt/` | One notebook per method (SVD, PCA, RPCA) run on simulated and real data. `v2` adds ground-truth metrics (Otsu-thresholded `|S|` vs. mask: precision, recall, F1, specificity, accuracy) |

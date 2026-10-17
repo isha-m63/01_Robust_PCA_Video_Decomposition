@@ -174,9 +174,9 @@ This project was developed as part of a self-study into linear algebra, optimiza
 ├── test/                                Earlier notebooks and eval.py (standalone metrics script)
 ├── rpca_demo.py                         Core routines for the demo: video -> matrix, SVD baseline, IALM, metrics
 ├── streamlit_app.py                     Interactive demo
-├── Dockerfile, requirements-demo.txt    Demo image
+├── Dockerfile, requirements.txt         Demo image and runtime dependencies (requirements-dev.txt: notebooks + tests)
 ├── demo_assets/                         Short sample clips (synthetic, synthetic GT mask, real)
-├── deploy/, scripts/deploy_space.py     Hugging Face Space deployment
+├── tests/                               pytest suite for rpca_demo.py
 ├── data/raw_data/                       111.mp4, 111_gt.mp4 (BMC 2012), Video_008.avi
 └── outputs/{v1,v2}/                     Cached observation matrices (.npy) and figures
 ```
@@ -186,7 +186,7 @@ This project was developed as part of a self-study into linear algebra, optimiza
 # live demo (Streamlit, Docker)
 
 `streamlit_app.py` provides an interactive demo (RPCA-IALM vs. truncated SVD, convergence plots,
-F1 against ground truth, animated GIF export). Short sample clips are bundled in `demo_assets/`;
+F1 and center location error against ground truth, optional randomized SVD, animated GIF export). Short sample clips are bundled in `demo_assets/`;
 you can also upload your own video. The algorithms live in `rpca_demo.py`.
 
 ```bash
@@ -194,11 +194,8 @@ docker build -t rpca-demo .
 docker run -p 7860:7860 rpca-demo      # http://localhost:7860
 ```
 
-Deploy to a Hugging Face Docker Space:
+**Streamlit Community Cloud:** new app from this repo, branch `main`, file `streamlit_app.py`, Python 3.11.
 
-```bash
-export HF_TOKEN=hf_xxx
-python scripts/deploy_space.py <username>/robust-pca-video
-```
+Run the tests with `pip install -r requirements-dev.txt && pytest`.
 
 ---

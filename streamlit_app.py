@@ -13,7 +13,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from rpca_demo import read_video_matrix, svd_baseline, rpca_ialm, foreground_scores
+from rpca_demo import read_video_matrix, svd_baseline, rpca_ialm, foreground_scores, center_location_error
 
 
 ASSETS = Path(__file__).parent / "demo_assets"
@@ -54,6 +54,8 @@ with st.sidebar:
                            format_func=lambda v: f"{v:.0e}", key=f"tol_{source}",
                            help="Relative residual at which IALM stops. Noisy real footage needs a looser value "
                                 "(early stopping) so noise is not absorbed into a high-rank background.")
+    svd_engine = st.radio("SVD inside RPCA", ["full", "randomized"], horizontal=True,
+                          help="Randomized SVD only computes the leading singular triplets (faster, same result here).")
     run = st.button("Run decomposition", type="primary", use_container_width=True)
 
 
@@ -88,7 +90,7 @@ if run:
     bar = st.progress(0.0, text="Running RPCA (IALM)…")
     L_svd, S_svd, t_svd = svd_baseline(M, svd_k)
     lam = lam_scale / np.sqrt(max(M.shape))
-    L, S, diag = rpca_ialm(M, lam=lam, max_iter=max_iter, tol=tol,
+    L, S, diag = rpca_ialm(M, lam=lam, max_iter=max_iter, tol=tol, svd=svd_engine,
                            progress=lambda f, r, k: bar.progress(f, text=f"IALM — residual {r:.1e}, rank {k}"))
     bar.empty()
     st.session_state["res"] = dict(M=M, GT=GT, L_svd=L_svd, S_svd=S_svd, t_svd=t_svd, L=L, S=S, diag=diag,
@@ -162,13 +164,19 @@ with tab_metrics:
         f"{np.linalg.norm(M - res['L_svd'] - res['S_svd']) / np.linalg.norm(M):.2e}",
         f"{np.linalg.norm(M - L - S) / np.linalg.norm(M):.2e}"]
     if GT is not None:
-        sc_svd = foreground_scores(res["S_svd"], GT)
-        sc_rpca = foreground_scores(S, GT)
+        thr = st.slider("Foreground threshold on |S|", 0.02, 0.50, 0.10, 0.01,
+                        help="A pixel counts as foreground when |S| exceeds this value.")
+        sc_svd = foreground_scores(res["S_svd"], GT, thr)
+        sc_rpca = foreground_scores(S, GT, thr)
+        cle_svd, n_svd = center_location_error(res["S_svd"], GT, (h, w), thr)
+        cle_rpca, n_rpca = center_location_error(S, GT, (h, w), thr)
         rows["Precision"] = [round(sc_svd[0], 3), round(sc_rpca[0], 3)]
         rows["Recall"] = [round(sc_svd[1], 3), round(sc_rpca[1], 3)]
         rows["F1"] = [round(sc_svd[2], 3), round(sc_rpca[2], 3)]
+        rows["Center location error (px)"] = [round(cle_svd, 2), round(cle_rpca, 2)]
     st.dataframe(rows, use_container_width=True, hide_index=True)
     if GT is None:
-        st.caption("Ground-truth masks are only available for the synthetic sample (pixel-level F1 at |S| > 0.1).")
+        st.caption("Ground-truth masks are only available for the synthetic sample.")
     else:
-        st.caption("Foreground = |S| > 0.1, compared pixel-wise with the BMC ground-truth masks.")
+        st.caption("Pixel-wise comparison with the BMC ground-truth masks. Center location error = distance between "
+                   "the centroids of the predicted and true foreground, averaged over frames where both exist.")

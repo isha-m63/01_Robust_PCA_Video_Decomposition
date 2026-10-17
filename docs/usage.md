@@ -3,10 +3,10 @@
 ## Install
 
 ```bash
-pip install numpy scipy scikit-image scikit-learn opencv-python matplotlib seaborn streamlit pillow jupyter
+pip install -r requirements-dev.txt     # demo + notebooks + pytest
 ```
 
-The demo alone needs only `requirements-demo.txt` (Streamlit, NumPy, OpenCV headless, Matplotlib, Pillow).
+The demo alone needs only `requirements.txt` (Streamlit, NumPy, OpenCV headless, Matplotlib, Pillow). Run the tests with `pytest`.
 
 ## Data
 
@@ -49,13 +49,13 @@ Start with `v2_with_gt/01…03` for a clean per-method comparison, or
 `video_decomposition_pipeline.ipynb` for the full story. Paths in the notebooks point to the original machine
 (`/home/isha/Desktop/AI_ML_2026/...`); update them to your checkout.
 
-## Docker and Hugging Face
+## Docker and Streamlit Community Cloud
 
 ```bash
 docker build -t rpca-demo .
 docker run -p 7860:7860 rpca-demo         # http://localhost:7860
-export HF_TOKEN=hf_xxx
-python scripts/deploy_space.py <username>/robust-pca-video
 ```
+
+For Streamlit Community Cloud create an app from the repository: branch `main`, file `streamlit_app.py`, Python 3.11.
 
 The image is `python:3.11-slim` with `libglib2.0-0` (OpenCV), runs as uid 1000, and allows uploads up to 50 MB.

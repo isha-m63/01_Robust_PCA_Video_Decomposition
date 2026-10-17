@@ -1,30 +1,28 @@
-# Known issues and unfinished work
+# Known issues and remaining limitations
 
-Found while documenting the code. Nothing below has been changed.
+## Fixed in the demo code (`rpca_demo.py`, `streamlit_app.py`)
+- **Randomized SVD** is implemented (`randomized_svd`, `svt(..., randomized=True)`, `rpca_ialm(..., svd="randomized")`)
+  and selectable in the demo. On the synthetic clip it gives the same result as the exact SVD about 20% faster.
+- **Center Location Error** is implemented (`center_location_error`) and shown next to precision/recall/F1.
+- **Threshold exploration:** the demo's metrics tab has a slider for the `|S|` threshold, so the low-recall behaviour of
+  a fixed Otsu threshold can be explored interactively.
+- **Different initial μ:** the notebooks' solver and `rpca_demo.py` both use `μ₀ = 1.25 / ‖M‖₂`. The other rule
+  (`mn / (4‖M‖₁)`) appears only in a raw "#EXTRA" diagnostic cell of the pipeline notebook. It does not work with
+  this solver on its own (L becomes dense after two iterations), so it is not offered.
+- A pytest suite (`tests/test_rpca.py`) covers the operators, both SVD engines, the metrics and video reading.
+- Requirements are version ranges in `requirements.txt` / `requirements-dev.txt`; duplicate/Hugging-Face-only files
+  were removed.
 
-## Claims without code or results
-- **Randomized SVD** is mentioned (`In Step 7 we replace this with randomized SVD for speed`), but all SVDs use
-  `np.linalg.svd`.
-- **Center Location Error (CLE)** is described in a markdown cell of the pipeline notebook; no function or output
-  computes it.
-- **"Reduced ghosting compared with standard SVD"** (original README) is supported visually by the saved figures
-  (`outputs/v2/SVD_MLS_sim_data_ghosting.png`), but not by the quantitative foreground metrics, where RPCA's F1 (0.091)
-  is slightly below SVD's (0.104).
-
-## Evaluation
-- PSNR/SSIM use frame 0 of `M` as a "clean background" reference, which may itself contain foreground objects.
-- Ground-truth metrics for the real clip reuse the synthetic sequence's mask (the notebook says so in a note) and are
-  not meaningful.
-- Recall is below 6% on the synthetic ground truth for all methods; the Otsu threshold on `|S|` may be too strict, but
-  other thresholds were not explored.
-
-## Reproducibility
-- Notebook paths are absolute paths from the original machine
+## Still open (notebooks and evaluation)
+- The notebooks are unchanged (they have uncommitted local edits). Their markdown still mentions randomized SVD and CLE
+  as if computed, and they contain absolute paths from the original machine
   (`/home/isha/Desktop/AI_ML_2026/Projects/Robust_PCA_Video_Decomposition/...`); `test/eval.py` has the same.
-- The first git-tracked notebook run shows a warning that `111_gt.mp4` was not found at the time.
+- The demo's foreground metrics are not comparable with the notebooks' table: the demo uses 320×240 clips, a fixed
+  threshold on `|S|`, and its own ground-truth binarisation, while the notebooks use Otsu thresholds on the full-size
+  masks.
+- PSNR/SSIM in the notebooks use frame 0 of `M` as a "clean background" reference, which may itself contain foreground.
+- Ground-truth metrics for the real clip reuse the synthetic sequence's mask (the notebook says so) and are not
+  meaningful.
+- "Reduced ghosting compared with SVD" is supported visually (`outputs/v2/SVD_MLS_sim_data_ghosting.png`) but not by
+  the notebooks' quantitative foreground metrics.
 - `outputs/` (cached `.npy` matrices), `data/`, `test/` and `v1_no_gt`/`v2_with_gt` are untracked in git.
-- `video_decomposition_pipeline.ipynb` has uncommitted modifications.
-
-## Code
-- `rpca_demo.py` and the pipeline notebook use different initial `μ`; results are close but not bit-identical.
-- There is no automated test suite for this project.
