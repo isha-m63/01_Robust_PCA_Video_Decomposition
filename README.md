@@ -14,7 +14,7 @@ The implementation includes:
 - Singular Value Thresholding (SVT)
 - soft-thresholding proximal operators
 - iterative convex optimization
-- randomized SVD acceleration
+- (planned, not yet implemented: randomized SVD acceleration)
 - evaluation on both synthetic and real-world video sequences
 
 
@@ -189,29 +189,66 @@ Implemented and analyzed:
 - F1 score
 
 ## geometric metric
-- Center Location Error (CLE)
+- Center Location Error (CLE): defined in the pipeline notebook but not yet computed
 
 
 ---
 
 # results
 
-The RPCA decomposition successfully:
-- separated static backgrounds
-- isolated moving foreground objects
-- reduced ghosting artifacts compared to standard SVD
+BMC 2012 sequence 111 (synthetic street scene, 25–30 s = 125 frames, 90×120 px, `M` is 10,800 × 125) and a real
+surveillance clip, Video_008 (50 frames). Values are from `v2_with_gt/` notebooks.
 
-Observed real-world limitations can included:
-- illumination changes
-- dynamic backgrounds
-- increased effective rank
-- shadow artifacts
-- camera motion sensitivity
+| | Truncated SVD (k=3) | PCA | RPCA (IALM) |
+|---|---|---|---|
+| Synthetic: PSNR / SSIM of L | 42.26 dB / 0.9870 | 42.09 dB / 0.9860 | **45.65 dB / 0.9972** |
+| Synthetic: foreground F1 (Otsu) | 0.104 | 0.108 | 0.091 |
+| Real: PSNR / SSIM of L | 23.76 dB / 0.8362 | 23.70 dB / 0.8319 | 23.71 dB / 0.8395 |
+
+RPCA on the synthetic sequence converges in 46 iterations (6.7 s), recovers a **rank-1** background, and leaves 97.2%
+of `S` exactly zero. On the real clip it converges in 70 iterations but the background rank grows to **25 of 50** and
+`S` is only 17% zeros, i.e. the low-rank/sparse assumption breaks down.
+
+Reading these honestly:
+- RPCA gives the best background reconstruction on the synthetic video. PSNR and SSIM are measured against frame 0 of
+  `M`, used as a stand-in for a clean background, so they are a proxy.
+- On the ground-truth foreground masks all three methods have **high precision (≈ 0.6) but very low recall (≈ 0.05)**,
+  so F1 is ≈ 0.1 and RPCA is not better than SVD there. The moving vehicles are small, and at the Otsu threshold most
+  foreground pixels are missed.
+- The ground-truth numbers for the real clip (F1 ≈ 0.01) are not meaningful: the notebook applies the synthetic
+  sequence's mask to a different video.
+- Real-world limitations observed or expected: illumination changes, dynamic backgrounds, increased effective rank,
+  shadows, and camera motion. The Streamlit demo uses a looser stopping tolerance for the real clip so that noise is not
+  absorbed into a high-rank background.
+
+Details in [docs/results.md](docs/results.md).
 
 ---
 
+# documentation
 
+| Doc | What it covers |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Pipeline, IALM algorithm as implemented, module and notebook map |
+| [docs/usage.md](docs/usage.md) | Install, data, running the notebooks and demo, parameters |
+| [docs/results.md](docs/results.md) | Full metrics tables, convergence behaviour, interpretation |
+| [docs/known-issues.md](docs/known-issues.md) | Claims not backed by code, hard-coded paths, other gaps |
 
+# repository structure
+
+```text
+├── video_decomposition_pipeline.ipynb   Original end-to-end notebook (SVD baseline, IALM, metrics, real video)
+├── v1_no_gt/                            Per-method notebooks without ground truth (01_svd, 02_pca, 03_rpca)
+├── v2_with_gt/                          Same notebooks with ground-truth foreground metrics
+├── test/                                Earlier notebooks and eval.py (standalone metrics script)
+├── rpca_demo.py                         Core routines for the demo: video -> matrix, SVD baseline, IALM, metrics
+├── streamlit_app.py                     Interactive demo
+├── Dockerfile, requirements-demo.txt    Demo image
+├── demo_assets/                         Short sample clips (synthetic, synthetic GT mask, real)
+├── deploy/, scripts/deploy_space.py     Hugging Face Space deployment
+├── data/raw_data/                       111.mp4, 111_gt.mp4 (BMC 2012), Video_008.avi
+└── outputs/{v1,v2}/                     Cached observation matrices (.npy) and figures
+```
 
 ---
 
@@ -232,3 +269,11 @@ Deploy to a Hugging Face Docker Space:
 export HF_TOKEN=hf_xxx
 python scripts/deploy_space.py <username>/robust-pca-video
 ```
+
+---
+
+# references
+
+- Candès, Li, Ma & Wright (2011), *Robust Principal Component Analysis?*, J. ACM 58(3).
+- Lin, Chen & Ma (2010), *The Augmented Lagrange Multiplier Method for Exact Recovery of Corrupted Low-Rank Matrices*, arXiv:1009.5055.
+- Vacavant et al. (2012), *A Benchmark Dataset for Outdoor Foreground/Background Extraction* (BMC 2012).
