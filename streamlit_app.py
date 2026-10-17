@@ -4,6 +4,12 @@ Streamlit demo: Robust PCA (IALM) for video background / foreground separation.
 M = L + S   (L: low-rank static background, S: sparse moving foreground)
 Compares a rank-k truncated SVD baseline with RPCA solved by IALM.
 """
+import os
+
+# Shared cloud containers are CPU-throttled; oversubscribed BLAS threads make the SVD many times slower.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import io
 import tempfile
 from pathlib import Path
@@ -18,8 +24,8 @@ from rpca_demo import read_video_matrix, svd_baseline, rpca_ialm, foreground_sco
 
 ASSETS = Path(__file__).parent / "demo_assets"
 SAMPLES = {
-    "Synthetic street scene (BMC 2012 #111, with ground truth)": dict(video="synthetic_scene.mp4", gt="synthetic_scene_gt.mp4", start=125, frames=125, tol=1e-7),
-    "Real surveillance clip (BMC 2012 Video_008)": dict(video="real_scene.mp4", gt=None, start=50, frames=100, tol=1e-2),
+    "Synthetic street scene (BMC 2012 #111, with ground truth)": dict(video="synthetic_scene.mp4", gt="synthetic_scene_gt.mp4", start=125, frames=80, tol=1e-4),
+    "Real surveillance clip (BMC 2012 Video_008)": dict(video="real_scene.mp4", gt=None, start=50, frames=60, tol=1e-2),
 }
 UPLOAD = "Upload your own video"
 MAX_PIXELS = 160 * 120
@@ -42,7 +48,7 @@ with st.sidebar:
         up, start, frames_default = None, sample["start"], sample["frames"]
 
     st.header("Settings")
-    width = st.select_slider("Frame width (px)", [60, 80, 100, 120, 160], value=120)
+    width = st.select_slider("Frame width (px)", [60, 80, 100, 120, 160], value=100)
     height = int(round(width * 0.75))
     n_frames = st.slider("Frames", 20, MAX_FRAMES, min(frames_default, MAX_FRAMES), step=5)
     step = st.select_slider("Frame step", [1, 2, 3, 5], value=1)
@@ -54,7 +60,7 @@ with st.sidebar:
                            format_func=lambda v: f"{v:.0e}", key=f"tol_{source}",
                            help="Relative residual at which IALM stops. Noisy real footage needs a looser value "
                                 "(early stopping) so noise is not absorbed into a high-rank background.")
-    svd_engine = st.radio("SVD inside RPCA", ["full", "randomized"], horizontal=True,
+    svd_engine = st.radio("SVD inside RPCA", ["randomized", "full"], horizontal=True,
                           help="Randomized SVD only computes the leading singular triplets (faster, same result here).")
     run = st.button("Run decomposition", type="primary", use_container_width=True)
 
@@ -99,7 +105,7 @@ if run:
 res = st.session_state.get("res")
 if not res:
     st.info("Pick a video in the sidebar and press **Run decomposition**. "
-            "The sample clips take roughly 5–20 seconds on CPU.")
+            "The sample clips take a few seconds on CPU (longer on shared cloud hosts).")
     st.stop()
 
 M, GT, L, S, diag = res["M"], res["GT"], res["L"], res["S"], res["diag"]
